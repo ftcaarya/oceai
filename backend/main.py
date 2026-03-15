@@ -39,7 +39,7 @@ class FirstMateRequest(BaseModel):
     lat: float
     lon: float
     water_temp_f: Optional[float] = None
-    history: list = []
+    history: list[dict] = []
 
 @app.post("/firstmate")
 async def first_mate(req: FirstMateRequest):
