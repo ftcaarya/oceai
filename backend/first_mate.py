@@ -14,6 +14,7 @@ def get_moon_phase():
     elif phase < 31.25:   name = "Waxing Crescent"
     elif phase < 43.75:   name = "First Quarter"
     elif phase < 56.25:   name = "Waxing Gibbous"
+    elif phase < 56.25:   name = "Waxing Gibbous"
     elif phase < 68.75:   name = "Full Moon"
     elif phase < 81.25:   name = "Waning Gibbous"
     elif phase < 93.75:   name = "Last Quarter"
@@ -186,10 +187,16 @@ def get_species(lat, lon, water_temp_f=None):
 # MASTER FETCH
 
 def fetch_all_conditions(lat, lon, water_temp_f=None):
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor() as ex:
+        f_tides   = ex.submit(get_tides, lat, lon)
+        f_weather = ex.submit(get_weather, lat, lon)
+        f_moon    = ex.submit(get_moon_phase)
+        f_species = ex.submit(get_species, lat, lon, water_temp_f)
     return {
         "location": {"lat": lat, "lon": lon},
-        "tides":    get_tides(lat, lon),
-        "weather":  get_weather(lat, lon),
-        "moon":     get_moon_phase(),
-        "species":  get_species(lat, lon, water_temp_f)
+        "tides":    f_tides.result(),
+        "weather":  f_weather.result(),
+        "moon":     f_moon.result(),
+        "species":  f_species.result(),
     }

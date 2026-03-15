@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents } from 'react-leaflet'
+import { useState, useEffect } from 'react'
+import { MapContainer, TileLayer, Marker, Popup, Circle, useMapEvents, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { callFirstMate } from '../utils/api'
@@ -20,6 +20,14 @@ function LocationPicker({ onLocationSelect }) {
   return null
 }
 
+function MapRecenter({ lat, lon }) {
+  const map = useMap()
+  useEffect(() => {
+    map.flyTo([lat, lon], map.getZoom(), { duration: 0.8 })
+  }, [lat, lon])
+  return null
+}
+
 function DataCard({ label, value, sub, icon }) {
   return (
     <div className="glass rounded-xl p-4 group hover:glow-sm transition-all duration-300">
@@ -36,6 +44,7 @@ function DataCard({ label, value, sub, icon }) {
 export default function FishPredictor() {
   const [selectedLat, setSelectedLat] = useState(40.7128)
   const [selectedLon, setSelectedLon] = useState(-74.0060)
+  const [mapCenter, setMapCenter] = useState({ lat: 40.7128, lon: -74.0060 })
   const [waterTemp, setWaterTemp] = useState(65)
   const [results, setResults] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -44,6 +53,7 @@ export default function FishPredictor() {
   const handleLocationSelect = (lat, lon) => {
     setSelectedLat(lat)
     setSelectedLon(lon)
+    setMapCenter({ lat, lon })
   }
 
   const handleFetch = async () => {
@@ -95,6 +105,7 @@ export default function FishPredictor() {
                   url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
                   attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>'
                 />
+                <MapRecenter lat={mapCenter.lat} lon={mapCenter.lon} />
                 <LocationPicker onLocationSelect={handleLocationSelect} />
                 <Marker position={[selectedLat, selectedLon]}>
                   <Popup>
@@ -125,6 +136,7 @@ export default function FishPredictor() {
                   type="number"
                   value={selectedLat.toFixed(4)}
                   onChange={(e) => setSelectedLat(parseFloat(e.target.value))}
+                  onBlur={() => setMapCenter({ lat: selectedLat, lon: selectedLon })}
                   step="0.0001"
                   className="w-full bg-base-900 border border-base-700/50 rounded-lg px-3 py-1.5 text-sm text-base-100 font-mono"
                 />
@@ -135,6 +147,7 @@ export default function FishPredictor() {
                   type="number"
                   value={selectedLon.toFixed(4)}
                   onChange={(e) => setSelectedLon(parseFloat(e.target.value))}
+                  onBlur={() => setMapCenter({ lat: selectedLat, lon: selectedLon })}
                   step="0.0001"
                   className="w-full bg-base-900 border border-base-700/50 rounded-lg px-3 py-1.5 text-sm text-base-100 font-mono"
                 />

@@ -1,5 +1,4 @@
 import {useState, useRef, useEffect} from 'react'
-import {callFirstMate} from '../utils/api'
 import HighlightablePkg from "highlightable";
 const Highlightable = HighlightablePkg.default ?? HighlightablePkg;
 
@@ -96,6 +95,7 @@ export default function ChatBot() {
     const [showSources, setShowSources] = useState(false)
     const messagesEndRef = useRef(null)
     const inputRef = useRef(null)
+    const abortRef = useRef(null)
     // const sourceString = useRef(null)
 
     useEffect(() => {
@@ -107,9 +107,9 @@ export default function ChatBot() {
         return () => document.removeEventListener('selectionchange', onSelectionChange)
     }, [])
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
-    }, [messages])
+    // useEffect(() => {
+    //     messagesEndRef.current?.scrollIntoView({behavior: 'smooth'})
+    // }, [loading])
 
     useEffect(() => {
         inputRef.current?.focus()
@@ -123,26 +123,98 @@ export default function ChatBot() {
         setInput('')
         setLoading(true)
 
-        try {
-            const result = await callFirstMate(input, 0, 0, null, messages)
-            if (result.success) {
-                setMessages(prev => [...prev, {role: 'assistant', content: result.data.response, sources: result.data.conditions}])
-            } else {
-                setMessages(prev => [...prev, {role: 'assistant', content: `Something went wrong: ${result.error}`}])
-            }
-        } catch {
-            setMessages(prev => [...prev, {
+        // try {
+        //     const result = await callFirstMate(input, 0, 0, null, messages)
+        //     if (result.success) {
+        //         setMessages(prev => [...prev, {role: 'assistant', content: result.data.response, sources: result.data.conditions}])
+        //     } else {
+        //         setMessages(prev => [...prev, {role: 'assistant', content: `Something went wrong: ${result.error}`}])
+        //     }
+        // } catch {
+        //     setMessages(prev => [...prev, {
+        //         role: 'assistant',
+        //         content: 'Connection failed. Make sure the backend is running.'
+        //     }])
+        // } finally {
+        //     setLoading(false)
+        // }
+        if(mode === 'policy') {
+            abortRef.current = new AbortController()
+            const res = await fetch("http://localhost:11434/api/generate", {
+                method: "POST",
+                body: JSON.stringify({ model: "oceai:latest", prompt: userMessage.content, stream: true }),
+                signal: abortRef.current.signal,
+            });
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            setMessages(prev => {return [...prev, {
                 role: 'assistant',
-                content: 'Connection failed. Make sure the backend is running.'
-            }])
-        } finally {
+                content : ''
+            }]});
             setLoading(false)
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n').filter(l => l.trim());
+                    for (const line of lines) {
+                        const json = JSON.parse(line);
+                        if (json.response) {
+                            setMessages(prev => [...prev.slice(0, prev.length - 1), {
+                                role: 'assistant',
+                                content: prev[prev.length - 1].content + json.response
+                            }]);
+                        }
+                    }
+                }
+            } catch {
+                // fetch was aborted, do nothing
+            }
         }
+        else {
+            abortRef.current = new AbortController()
+            const res = await fetch("http://localhost:11434/api/generate", {
+                method: "POST",
+                body: JSON.stringify({ model: "policy:latest", prompt: userMessage.content, stream: true }),
+                signal: abortRef.current.signal,
+            });
+
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            setMessages(prev => {return [...prev, {
+                role: 'assistant',
+                content : ''
+            }]});
+            setLoading(false)
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n').filter(l => l.trim());
+                    for (const line of lines) {
+                        const json = JSON.parse(line);
+                        if (json.response) {
+                            setMessages(prev => [...prev.slice(0, prev.length - 1), {
+                                role: 'assistant',
+                                content: prev[prev.length - 1].content + json.response
+                            }]);
+                        }
+                    }
+                }
+            } catch {
+                // fetch was aborted, do nothing
+            }
+        }
+
     }
 
     const clearChat = () => {
+        abortRef.current?.abort()
         setMessages([])
-        inputRef.current?.focus()
+        // inputRef.current?.focus()
     }
 
     // const sources = showSources || {}
@@ -187,6 +259,7 @@ export default function ChatBot() {
                             <button
                                 key={m.id}
                                 onClick={() => {
+                                    abortRef.current?.abort()
                                     setMode(m.id);
                                     setMessages([])
                                 }}
